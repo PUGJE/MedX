@@ -1,18 +1,84 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TriageService } from '../lib/triage.service';
 import type { TriageRequest } from '../lib/triage.service';
 import { type TriageReport } from '../lib/triage.schema';
 import { FiActivity, FiClock, FiAlertTriangle, FiCheckCircle, FiHeart, FiThermometer, FiDroplet, FiPhone } from 'react-icons/fi';
+import { useTranslation } from '../contexts/LanguageContext';
 
 export default function TriageBot() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [input, setInput] = useState('');
   const [age, setAge] = useState('');
   const [sex, setSex] = useState<'male' | 'female' | 'other' | 'unknown'>('unknown');
   const [report, setReport] = useState<TriageReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [askedFollowUp, setAskedFollowUp] = useState(false);
+  const [followUpQuestion, setFollowUpQuestion] = useState('');
+  const [followUpAnswer, setFollowUpAnswer] = useState('');
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imagePayload, setImagePayload] = useState<{ mimeType: string; data: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const [isListening, setIsListening] = useState(false);
+
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const rec = new SpeechRecognition();
+      rec.lang = 'en-US';
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      rec.onresult = (event: any) => {
+        const transcript: string = Array.from(event.results)
+          .map((r: any) => r[0]?.transcript || '')
+          .join(' ')
+          .trim();
+        if (transcript) {
+          setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        }
+      };
+      rec.onend = () => setIsListening(false);
+      rec.onerror = () => setIsListening(false);
+      recognitionRef.current = rec;
+    }
+  }, []);
+
+  const toggleVoice = () => {
+    const rec = recognitionRef.current;
+    if (!rec) {
+      setError(t('errors.voiceNotSupported'));
+      return;
+    }
+    if (isListening) {
+      try { rec.stop(); } catch {}
+      setIsListening(false);
+    } else {
+      setError(null);
+      try { rec.start(); setIsListening(true); } catch {}
+    }
+  };
+
+  const buildFollowUpIfNeeded = (text: string): { needed: boolean; question: string } => {
+    const t = (text || '').toLowerCase().trim();
+    const words = t.split(/\s+/).filter(Boolean);
+    const wordCount = words.length;
+    const hasDuration = /(for|since)\s+\d+\s*(hour|hours|day|days|week|weeks)/i.test(text) || /\b(\d+)\s*(h|hr|hrs|d|w)\b/i.test(text);
+    const hasLocation = /(head|throat|chest|back|stomach|abdomen|leg|arm|shoulder|knee|ear|eye|tooth|neck|lower back|upper back)/i.test(text);
+    const hasSeverity = /(mild|moderate|severe|worst|pain\s*scale|out of 10)/i.test(text);
+    const hasSymptomKeyword = /(pain|ache|hurts|sore|fever|cough|vomit|nausea|diarrhea|dizzy|headache|cold|flu)/i.test(text);
+
+    // Ask only when extremely mandatory:
+    // - Very short input OR
+    // - No duration, no location, no severity AND no recognizable symptom keyword
+    const extremelyVague = (!hasDuration && !hasLocation && !hasSeverity && !hasSymptomKeyword);
+    if (wordCount < 5 || extremelyVague) {
+      return { needed: true, question: 'Which part is most affected?' };
+    }
+    return { needed: false, question: '' };
+  };
 
   const handleSubmit = async () => {
     if (!input.trim()) return;
@@ -22,15 +88,36 @@ export default function TriageBot() {
     setReport(null);
 
     try {
+      // One-time follow-up flow
+      if (!askedFollowUp) {
+        const f = buildFollowUpIfNeeded(input);
+        if (f.needed) {
+          setAskedFollowUp(true);
+          setFollowUpQuestion(f.question);
+          setLoading(false);
+          return;
+        }
+      }
+
+      const combinedTranscript = askedFollowUp && followUpAnswer.trim()
+        ? `${input}\nFollow-up answer: ${followUpAnswer.trim()}`
+        : input;
+
       const request: TriageRequest = {
         patientId: crypto.randomUUID(),
-        transcript: input,
+        transcript: combinedTranscript,
         age: parseInt(age, 10) || undefined,
         sex: sex,
+        image: imagePayload || undefined,
       };
 
       const result = await TriageService.analyzeSymptoms(request);
       setReport(result);
+      // Reset follow-up state after submission
+      setAskedFollowUp(false);
+      setFollowUpQuestion('');
+      setFollowUpAnswer('');
+      // keep image after submit so user sees preview alongside report
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -112,39 +199,130 @@ export default function TriageBot() {
         </div>
 
         {/* Symptoms Input */}
-        <div>
+        <div className="relative">
           <label htmlFor="symptoms" className="block text-sm font-medium text-gray-200 mb-2">
-            Describe your symptoms
+            {t('consultation.describeSymptoms')}
           </label>
           <textarea
             id="symptoms"
-            className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none"
+            className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-3 pr-12 pl-12 pb-12 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none"
             rows={4}
-            placeholder="Example: I've had a fever for 3 days, sore throat, and body aches..."
+            placeholder={t('consultation.symptomsPlaceholder')}
             value={input}
             onChange={(e) => setInput(e.target.value)}
           />
+          {/* Plus button - bottom-left */}
+          <button
+            type="button"
+            aria-label={t('consultation.addImage')}
+            onClick={() => fileInputRef.current?.click()}
+            className="absolute bottom-3 left-3 w-9 h-9 rounded-full bg-white/10 hover:bg-white/15 border border-white/20 text-white flex items-center justify-center"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 5v14m7-7H5"/></svg>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = () => {
+                const result = String(reader.result || '');
+                const base64 = result.split(',')[1] || '';
+                setImagePreview(result);
+                setImagePayload({ mimeType: file.type, data: base64 });
+              };
+              reader.readAsDataURL(file);
+            }}
+          />
+          {/* Mic button - bottom-right */}
+          <button
+            type="button"
+            aria-label={t('consultation.voiceInput')}
+            onClick={toggleVoice}
+            className={`absolute bottom-3 right-3 w-9 h-9 rounded-full border text-white flex items-center justify-center ${isListening ? 'bg-red-500/80 border-red-500' : 'bg-white/10 hover:bg-white/15 border-white/20'}`}
+          >
+            {isListening ? (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 animate-pulse"><path d="M12 14a3 3 0 0 0 3-3V7a3 3 0 1 0-6 0v4a3 3 0 0 0 3 3zm-7-3a7 7 0 0 0 14 0h-2a5 5 0 0 1-10 0H5z"/></svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 14a3 3 0 0 0 3-3V7a3 3 0 1 0-6 0v4a3 3 0 0 0 3 3zm-7-3a7 7 0 0 0 14 0h-2a5 5 0 0 1-10 0H5z"/></svg>
+            )}
+          </button>
         </div>
 
         {/* Submit Button */}
         <button
           onClick={handleSubmit}
-          disabled={loading || !input.trim()}
+        disabled={loading || !input.trim() || (askedFollowUp && !followUpAnswer.trim())}
           className="w-full bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
         >
           {loading ? (
             <>
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Analyzing Symptoms...
+              {t('consultation.analyzing')}
             </>
           ) : (
             <>
               <FiActivity className="w-4 h-4" />
-              Analyze Symptoms
+            {askedFollowUp ? t('consultation.submitFollowUp') : t('consultation.analyzeButton')}
             </>
           )}
         </button>
       </div>
+
+      {/* Image attach */}
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-gray-400">You can attach an image of the affected area.</div>
+        <label className="inline-flex items-center gap-2 text-xs text-teal-300 hover:text-teal-200 cursor-pointer">
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = () => {
+                const result = String(reader.result || '');
+                const base64 = result.split(',')[1] || '';
+                setImagePreview(result);
+                setImagePayload({ mimeType: file.type, data: base64 });
+              };
+              reader.readAsDataURL(file);
+            }}
+          />
+          <span className="inline-flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M12 5v14m7-7H5"/></svg>
+            Add image
+          </span>
+        </label>
+      </div>
+
+      {/* Image preview pinned bottom-right of input card */}
+      {imagePreview && (
+        <div className="fixed bottom-6 right-6 bg-black/50 border border-white/20 rounded-lg p-2 shadow-lg z-[55]">
+          <div className="text-[10px] text-gray-300 mb-1">Attached image</div>
+          <img src={imagePreview} alt="attachment preview" className="w-24 h-24 object-cover rounded" />
+        </div>
+      )}
+
+      {/* Follow-up Question (one-time) */}
+      {askedFollowUp && (
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 space-y-3">
+          <div className="text-sm text-blue-200">{followUpQuestion}</div>
+          <input
+            type="text"
+            className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            placeholder="Type a short answer"
+            value={followUpAnswer}
+            onChange={(e) => setFollowUpAnswer(e.target.value)}
+          />
+          <p className="text-xs text-blue-300">We ask just one quick question to better understand your issue.</p>
+        </div>
+      )}
 
       {/* Error Display */}
       {error && (
@@ -181,6 +359,18 @@ export default function TriageBot() {
               <div className="bg-white/5 rounded-lg p-3">
                 <div className="text-gray-400">Gender</div>
                 <div className="text-white font-medium capitalize">{report.sex}</div>
+              </div>
+            )}
+            {/* Likely condition highlight */}
+            {Array.isArray(report.possibleConditions) && report.possibleConditions.length > 0 && report.possibleConditions[0]?.name && (
+              <div className="bg-teal-500/10 border border-teal-500/30 rounded-lg p-3 col-span-2">
+                <div className="text-teal-300 text-xs uppercase tracking-wide">Likely condition</div>
+                <div className="text-white font-semibold flex items-center gap-2">
+                  <span>{report.possibleConditions[0].name}</span>
+                  {typeof report.possibleConditions[0].confidence === 'number' && (
+                    <span className="text-xs text-teal-300">({Math.round(report.possibleConditions[0].confidence * 100)}%)</span>
+                  )}
+                </div>
               </div>
             )}
           </div>

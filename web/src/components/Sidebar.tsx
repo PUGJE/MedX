@@ -18,6 +18,7 @@ export default function Sidebar() {
   const handleLogout = () => {
     logout()
     setSidebarOpen(false)
+    navigate('/login', { replace: true })
   }
 
   const handleProfileClick = () => {
@@ -35,12 +36,12 @@ export default function Sidebar() {
     <>
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-black/50 z-40"
+        className="fixed inset-0 bg-black/50 z-[60]"
         onClick={() => setSidebarOpen(false)}
       />
       
       {/* Sidebar */}
-      <div className="fixed top-0 right-0 h-full w-80 bg-white dark:bg-gray-900 shadow-xl z-50 transform transition-transform duration-300 ease-in-out">
+      <div className="fixed top-0 right-0 h-full w-80 bg-white dark:bg-gray-900 shadow-xl z-[70] transform transition-transform duration-300 ease-in-out pb-[env(safe-area-inset-bottom)]">
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">

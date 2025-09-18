@@ -1,1 +1,36 @@
 @import "tailwindcss";
+
+/* RTL Support */
+.rtl {
+  direction: rtl;
+}
+
+.ltr {
+  direction: ltr;
+}
+
+/* RTL-specific styles */
+.rtl .rtl\:text-right {
+  text-align: right;
+}
+
+.rtl .rtl\:text-left {
+  text-align: left;
+}
+
+.rtl .rtl\:ml-auto {
+  margin-left: auto;
+}
+
+.rtl .rtl\:mr-auto {
+  margin-right: auto;
+}
+
+/* Language-specific font adjustments */
+[lang="hi"] {
+  font-family: 'Noto Sans Devanagari', 'Arial Unicode MS', sans-serif;
+}
+
+[lang="pa"] {
+  font-family: 'Noto Sans Gurmukhi', 'Arial Unicode MS', sans-serif;
+}

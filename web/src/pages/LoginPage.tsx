@@ -3,11 +3,13 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../state/AuthContext'
 import { FiLock } from 'react-icons/fi'
 import { SparklesCore } from '../components/ui/sparkles'
+import { useTranslation } from '../contexts/LanguageContext'
 
 export default function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation() as any
+  const { t } = useTranslation()
   const [username, setUsername] = useState('yts')
   const [password, setPassword] = useState('123')
   const [error, setError] = useState<string | null>(null)
@@ -23,7 +25,7 @@ export default function LoginPage() {
       const to = location.state?.from?.pathname || '/home'
       navigate(to, { replace: true })
     } else {
-      setError('Invalid credentials')
+      setError(t('errors.invalidCredentials'))
     }
   }
 
@@ -59,15 +61,15 @@ export default function LoginPage() {
             
             {/* Sign in text positioned over the sparkles */}
             <div className="absolute bottom-0 left-0 right-0 z-10">
-              <h2 className="text-2xl font-semibold text-white relative z-20">Sign in</h2>
-              <p className="text-sm text-gray-300 relative z-20">Use the demo credentials below</p>
+              <h2 className="text-2xl font-semibold text-white relative z-20">{t('auth.loginTitle')}</h2>
+              <p className="text-sm text-gray-300 relative z-20">{t('auth.loginSubtitle')}</p>
             </div>
           </div>
         </div>
         <form className="space-y-4 relative z-30" onSubmit={handleSubmit}>
           {/* Username Box */}
           <div className="bg-white/20 backdrop-blur-sm rounded-2xl shadow-lg ring-1 ring-white/30 p-4">
-            <label className="block text-sm mb-2 text-white/90 font-medium">Username</label>
+            <label className="block text-sm mb-2 text-white/90 font-medium">{t('auth.username')}</label>
             <div className="relative">
               <span className="pointer-events-none absolute inset-y-0 left-0 grid place-items-center pl-3 text-white/60">
                 <FiLock size={16} />
@@ -76,14 +78,14 @@ export default function LoginPage() {
                 className={`w-full rounded-xl border-0 bg-white/10 backdrop-blur-sm px-10 py-3 text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-teal-400/50 focus:bg-white/20 transition-all duration-200 relative z-10 ${error ? 'ring-2 ring-red-400/50' : ''}`}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter username"
+                placeholder={t('auth.username')}
               />
             </div>
           </div>
 
           {/* Password Box */}
           <div className="bg-white/20 backdrop-blur-sm rounded-2xl shadow-lg ring-1 ring-white/30 p-4">
-            <label className="block text-sm mb-2 text-white/90 font-medium">Password</label>
+            <label className="block text-sm mb-2 text-white/90 font-medium">{t('auth.password')}</label>
             <div className="relative">
               <span className="pointer-events-none absolute inset-y-0 left-0 grid place-items-center pl-3 text-white/60">
                 <FiLock size={16} />
@@ -93,7 +95,7 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
+                placeholder={t('auth.password')}
               />
             </div>
             {error && <p className="mt-2 text-xs text-red-300">{error}</p>}
@@ -104,12 +106,20 @@ export default function LoginPage() {
             className="inline-flex items-center justify-center rounded-2xl bg-gradient-to-b from-teal-600 to-teal-700 hover:from-teal-500 hover:to-teal-600 px-6 py-3 text-white font-medium transition-all duration-200 shadow-lg hover:shadow-xl w-full active:scale-[0.98]"
             disabled={loading}
           >
-            {loading ? 'Signing in...' : 'Sign in'}
+            {loading ? t('common.loading') : t('auth.loginButton')}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate('/signup')}
+            className="w-full text-center text-sm text-white/80 hover:text-white"
+          >
+            {t('auth.createAccount')}
           </button>
 
           {/* Demo Credentials */}
           <p className="text-xs text-white/70 text-center">
-            Demo: <span className="font-medium text-white/90">yts</span> / <span className="font-medium text-white/90">123</span>
+            {t('auth.demoCredentials')}
           </p>
         </form>
       </div>

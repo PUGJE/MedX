@@ -3,6 +3,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { z } from 'zod'
+import { createClient } from '@supabase/supabase-js'
 
 dotenv.config()
 
@@ -56,7 +57,61 @@ const genAI = process.env.GEMINI_API_KEY
   ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
   : null
 
-const SYSTEM = `You are a healthcare triage assistant. Return ONLY valid JSON matching this schema with fields described. No markdown, no extra text.`
+const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY)
+  : null
+
+// Allow overriding triage table via env; default to "triage_History" per user DB
+const TRIAGE_TABLE = process.env.TRIAGE_TABLE || 'triage_History'
+
+const SYSTEM = `You are a healthcare triage assistant.
+DO NOT explain, DO NOT use Markdown, DO NOT add extra text.
+Return ONLY valid JSON strictly matching this schema:
+
+{
+  "patientId": "string",
+  "triageDate": "string",
+  "age": number,
+  "sex": "male" | "female" | "other" | "unknown",
+  "vitals": {
+    "temperature": "string",
+    "heartRate": "string",
+    "bloodPressure": "string",
+    "oxygenSaturation": "string"
+  },
+  "symptoms": [
+    { "name": "string", "onset": "string", "severity": "mild|moderate|severe", "notes": "string" }
+  ],
+  "redFlags": ["string"],
+  "possibleConditions": [
+    { "name": "string", "confidence": 0.0 }
+  ],
+  "urgency": "low" | "medium" | "high",
+  "recommendedAction": "string",
+  "recommendedActionReason": "string",
+  "instantRemedies": ["string"],
+  "followUps": ["string"],
+  "summaryForDoctor": "string",
+  "disclaimers": ["string"]
+}
+
+Rules for High-Quality Recommendations:
+1.  Actionable & Specific: The "recommendedAction" MUST be concrete and directly related to the patient's symptoms.
+    -   BAD: "See a doctor."
+    -   GOOD: "Schedule an appointment with a primary care physician to evaluate your persistent cough and fever."
+
+2.  Justified: The "recommendedActionReason" MUST explain why the action is recommended, referencing specific symptoms.
+    -   Example: "A persistent cough lasting over a week, combined with a fever, requires a professional evaluation to rule out conditions like bronchitis or pneumonia."
+
+3.  Instant Remedies: For "low" or "medium" urgency cases, provide a list of specific, safe, at-home "instantRemedies". For "high" urgency, this MUST be an empty array.
+    -   BAD: "Stay hydrated."
+    -   GOOD: "Gargle with warm salt water 4-5 times a day to soothe a sore throat."
+    -   GOOD: "Apply a cold compress to your forehead for 15-minute intervals to help reduce fever."
+
+4.  JSON Only: Never output text before or after the JSON object. Never use Markdown.
+5.  Disclaimers: Always include the disclaimer field, like this: "disclaimers": ["This is not medical advice"].
+6.  Vitals: ONLY include the "vitals" object if the patient explicitly provides vital signs in the transcript. Otherwise, omit the key.
+7.  Doctor Summary: Do NOT include the patient's sex in the "summaryForDoctor" field.`
 
 function buildMockReport({ patientId, age, sex, transcript }) {
   const base = {
@@ -129,21 +184,44 @@ function normalizeTriage(raw, { patientId, age, sex }) {
 function extractTemperature(text) {
   if (!text || typeof text !== 'string') return null
   const t = text.toLowerCase()
-  // Explicit F/C markers
-  const exp = /(\d{2,3}(?:\.\d)?)\s*(?:°\s*)?([fc])/i
-  const m = t.match(exp)
-  if (m) {
-    const val = Number(m[1])
-    const unit = m[2] === 'c' ? 'C' : 'F'
-    return { value: val, unit }
+  // Require explicit mention of temp with unit markers to count as provided
+  const patterns = [
+    /(temperature|temp|fever)\s*(is|:|=)?\s*(\d{2,3}(?:\.\d)?)\s*(?:°\s*)?(c|f|celsius|fahrenheit)\b/,
+    /(\d{2,3}(?:\.\d)?)\s*(?:°\s*)?(c|f)\b\s*(temperature|temp)/,
+  ]
+  for (const exp of patterns) {
+    const m = t.match(exp)
+    if (m) {
+      const val = Number(m[3] || m[1])
+      const u = (m[4] || m[2] || '').toLowerCase()
+      const unit = u.startsWith('c') ? 'C' : 'F'
+      return { value: val, unit }
+    }
   }
-  // Numbers without unit: infer by range
-  const num = t.match(/\b(\d{2,3}(?:\.\d)?)\b/)
-  if (num) {
-    const val = Number(num[1])
-    if (val >= 100 && val <= 110) return { value: val, unit: 'F' }
-    if (val >= 38 && val <= 43) return { value: val, unit: 'C' }
-  }
+  return null
+}
+
+function extractHeartRate(text) {
+  if (!text || typeof text !== 'string') return null
+  const t = text.toLowerCase()
+  const m = t.match(/(heart\s*rate|hr|pulse)\s*(is|:|=)?\s*(\d{2,3})\s*(bpm)?\b/)
+  if (m) return `${Number(m[3])} bpm`
+  return null
+}
+
+function extractBloodPressure(text) {
+  if (!text || typeof text !== 'string') return null
+  const t = text.toLowerCase()
+  const m = t.match(/(blood\s*pressure|bp)\s*(is|:|=)?\s*(\d{2,3})\s*[\/\-]\s*(\d{2,3})\b/)
+  if (m) return `${Number(m[3])}/${Number(m[4])} mmHg`
+  return null
+}
+
+function extractOxygenSaturation(text) {
+  if (!text || typeof text !== 'string') return null
+  const t = text.toLowerCase()
+  const m = t.match(/(oxygen\s*saturation|spo2|o2\s*sat)\s*(is|:|=)?\s*(\d{2,3})\s*%/)
+  if (m) return `${Number(m[3])}%`
   return null
 }
 
@@ -167,11 +245,22 @@ function hasRedFlags(text) {
 function applyClinicalHeuristics(triage, transcript) {
   const out = { ...(triage || {}) }
 
-  // Extract or infer temperature
-  const t = extractTemperature(transcript)
-  if (!out.vitals) out.vitals = {}
-  if (t && !out.vitals.temperature) {
-    out.vitals.temperature = `${t.value} ${t.unit}`
+  // Extract explicitly provided vitals only
+  const temp = extractTemperature(transcript)
+  const hr = extractHeartRate(transcript)
+  const bp = extractBloodPressure(transcript)
+  const spo2 = extractOxygenSaturation(transcript)
+  const anyVitals = temp || hr || bp || spo2
+  if (anyVitals) {
+    out.vitals = out.vitals && typeof out.vitals === 'object' ? { ...out.vitals } : {}
+    if (temp && !out.vitals.temperature) out.vitals.temperature = `${temp.value} ${temp.unit}`
+    if (hr && !out.vitals.heartRate) out.vitals.heartRate = hr
+    if (bp && !out.vitals.bloodPressure) out.vitals.bloodPressure = bp
+    if (spo2 && !out.vitals.oxygenSaturation) out.vitals.oxygenSaturation = spo2
+  }
+  // Remove empty vitals to honor omission rule
+  if (out.vitals && !out.vitals.temperature && !out.vitals.heartRate && !out.vitals.bloodPressure && !out.vitals.oxygenSaturation) {
+    delete out.vitals
   }
 
   // Determine high fever
@@ -199,6 +288,19 @@ function applyClinicalHeuristics(triage, transcript) {
       : 'Reported red-flag symptoms require urgent assessment.'
   }
 
+  // Enforce instantRemedies empty for high urgency
+  if (out.urgency === 'high') {
+    out.instantRemedies = []
+  }
+
+  // Ensure recommendedActionReason present
+  if (!out.recommendedActionReason || !String(out.recommendedActionReason).trim()) {
+    const symptomNames = Array.isArray(out.symptoms) ? out.symptoms.map((s) => s?.name).filter(Boolean) : []
+    const snip = (transcript || '').trim().slice(0, 120)
+    const basis = symptomNames.length ? symptomNames.join(', ') : snip || 'reported symptoms'
+    out.recommendedActionReason = `Recommended due to ${basis}.`
+  }
+
   // Improve summaryForDoctor if placeholder/missing
   const placeholder = !out.summaryForDoctor || /auto\-generated/i.test(out.summaryForDoctor)
   if (placeholder) {
@@ -213,7 +315,7 @@ function applyClinicalHeuristics(triage, transcript) {
 
 app.post('/api/triage', async (req, res) => {
   try {
-    const { patientId, transcript, age, sex } = req.body || {}
+    const { patientId, transcript, age, sex, image } = req.body || {}
     if (!patientId || !transcript) {
       return res.status(400).json({ error: 'Missing required fields: patientId, transcript' })
     }
@@ -226,11 +328,17 @@ app.post('/api/triage', async (req, res) => {
       return res.status(200).json(validated)
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-    const prompt = `${SYSTEM}\n\nPatientId: ${patientId}\nAge: ${age ?? 'unknown'}\nSex: ${sex ?? 'unknown'}\n\nTranscript:\n${transcript}`
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash', systemInstruction: SYSTEM })
+    const userParts = [{ text: `PatientId: ${patientId}\nAge: ${age ?? 'unknown'}\nSex: ${sex ?? 'unknown'}\n\nTranscript:\n${transcript}` }]
+    if (image && image.mimeType && image.data) {
+      userParts.push({ inlineData: { mimeType: image.mimeType, data: image.data } })
+    }
     let text
     try {
-      const result = await model.generateContent(prompt)
+      const result = await model.generateContent({
+        contents: [{ role: 'user', parts: userParts }],
+        generationConfig: { responseMimeType: 'application/json' },
+      })
       text = result.response.text().trim()
     } catch (modelErr) {
       console.error('[api] Model call failed:', modelErr)
@@ -259,6 +367,43 @@ app.post('/api/triage', async (req, res) => {
       const normalized = normalizeTriage(parsed, { patientId, age, sex })
       const heur = applyClinicalHeuristics(normalized, transcript)
       const validated = TriageReportSchema.parse(heur)
+      
+      // Store triage history in database
+      if (supabase) {
+        try {
+          console.log('[api] Storing triage history in table:', TRIAGE_TABLE)
+          const triageData = {
+            id: crypto.randomUUID(),
+            age: age || null,
+            gender: sex || null,
+            symptoms: transcript,
+            description: validated.summaryForDoctor,
+            disease_category: validated.possibleConditions?.[0]?.name || null,
+            summary: validated.summaryForDoctor,
+            instant_remedies: validated.instantRemedies ? JSON.stringify(validated.instantRemedies) : null,
+            recommended_actions: validated.followUps ? JSON.stringify(validated.followUps) : null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+          
+          const { data, error } = await supabase
+            .from(TRIAGE_TABLE)
+            .insert(triageData)
+            .select('*')
+            .single()
+          
+          if (error) {
+            console.error('[api] Supabase error:', error)
+          } else {
+            console.log('[api] Triage history stored successfully:', data?.id)
+          }
+        } catch (dbErr) {
+          console.error('[api] Failed to store triage history:', dbErr?.message)
+        }
+      } else {
+        console.warn('[api] Supabase not configured, skipping triage history storage')
+      }
+      
       return res.status(200).json(validated)
     } catch (valErr) {
       console.warn('[api] Validation failed, using mock:', valErr?.message)

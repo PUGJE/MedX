@@ -8,6 +8,10 @@ export interface TriageRequest {
   transcript: string;
   age?: number;
   sex?: 'male' | 'female' | 'other' | 'unknown';
+  image?: {
+    mimeType: string; // e.g., 'image/jpeg'
+    data: string; // base64 data
+  };
 }
 
 export class TriageService {

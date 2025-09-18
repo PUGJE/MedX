@@ -1,23 +1,25 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { FiHome, FiMessageCircle, FiActivity, FiFileText, FiPackage } from 'react-icons/fi'
+import { useTranslation } from '../contexts/LanguageContext'
 
 export default function BottomNavigation() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { t } = useTranslation()
 
   const navItems = [
-    { path: '/home', icon: FiHome, label: 'Home' },
-    { path: '/consultation', icon: FiMessageCircle, label: 'Consultation' },
-    { path: '/symptoms', icon: FiActivity, label: 'Symptoms' },
-    { path: '/records', icon: FiFileText, label: 'Records' },
-    { path: '/medicines', icon: FiPackage, label: 'Medicines' },
+    { path: '/home', icon: FiHome, label: t('nav.home') },
+    { path: '/consultation', icon: FiMessageCircle, label: t('nav.consultation') },
+    { path: '/symptoms', icon: FiActivity, label: t('nav.symptoms') },
+    { path: '/records', icon: FiFileText, label: t('nav.records') },
+    { path: '/medicines', icon: FiPackage, label: t('nav.medicines') },
   ]
 
   const isActive = (path: string) => location.pathname === path
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-sm border-t border-gray-200 dark:bg-gray-900/80 dark:border-gray-700 z-50">
-      <div className="max-w-xl mx-auto px-4 py-2">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-sm border-t border-gray-200 dark:bg-gray-900/80 dark:border-gray-700 z-30">
+      <div className="max-w-xl mx-auto px-4 py-2 pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-center justify-around">
           {navItems.map(({ path, icon: Icon, label }) => (
             <button

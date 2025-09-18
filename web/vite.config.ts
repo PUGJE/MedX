@@ -13,4 +13,14 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    // Force cache busting
+    rollupOptions: {
+      output: {
+        entryFileNames: `assets/[name]-[hash].js`,
+        chunkFileNames: `assets/[name]-[hash].js`,
+        assetFileNames: `assets/[name]-[hash].[ext]`
+      }
+    }
+  }
 })
