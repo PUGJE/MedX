@@ -1,0 +1,38 @@
+# Node / JS
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-lock.yaml
+dist/
+build/
+coverage/
+.env*
+*.log
+
+# Next.js
+model/.next/
+model/.vercel/
+
+# React Native
+MyApp/.expo/
+MyApp/expo/
+MyApp/coverage/
+MyApp/web/node_modules/
+MyApp/android/.gradle/
+MyApp/android/.idea/
+MyApp/android/local.properties
+MyApp/android/**/build/
+MyApp/ios/build/
+MyApp/ios/Pods/
+MyApp/ios/*.xcworkspace
+MyApp/ios/*.xcodeproj/project.xcworkspace/
+MyApp/ios/*.xcodeproj/xcuserdata/
+MyApp/ios/*.xcodeproj/project.xcworkspace/xcshareddata/
+MyApp/ios/*.xcodeproj/xcshareddata/
+MyApp/android/app/debug.keystore
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
