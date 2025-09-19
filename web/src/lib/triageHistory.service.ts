@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient'
 
 export type TriageHistory = {
   id: string
+  username?: string
   age?: number
   gender?: string
   symptoms?: string
@@ -24,8 +25,10 @@ console.log('Current URL:', window.location.href)
 
 export class TriageHistoryService {
   static async create(entry: Partial<TriageHistory>): Promise<TriageHistory> {
+    const generateShortId = (): string => Math.random().toString(36).slice(2, 9)
     const fullPayload: any = {
-      id: crypto.randomUUID(),
+      id: generateShortId(),
+      username: entry.username ?? null,
       age: entry.age ?? null,
       gender: entry.gender ?? null,
       symptoms: entry.symptoms ?? null,
@@ -42,6 +45,7 @@ export class TriageHistoryService {
 
     const minimalPayload: any = {
       id: fullPayload.id,
+      username: fullPayload.username,
       age: fullPayload.age,
       gender: fullPayload.gender,
       symptoms: fullPayload.symptoms,
@@ -142,7 +146,7 @@ export class TriageHistoryService {
     return row as TriageHistory
   }
 
-  static async list(): Promise<TriageHistory[]> {
+  static async list(username?: string): Promise<TriageHistory[]> {
     console.log('TriageHistoryService.list() called with table:', TRIAGE_TABLE)
     console.log('Supabase client configured:', !!supabase)
     
@@ -150,9 +154,11 @@ export class TriageHistoryService {
     const tableName = 'triage_History'
     console.log('Using hardcoded table name:', tableName)
     
-    const { data, error } = await supabase
+    let query = supabase
       .from(tableName)
       .select('*')
+    if (username) query = query.eq('username', username)
+    const { data, error } = await query
       .order('created_at', { ascending: false })
     if (error) {
       console.error('TriageHistoryService.list() error:', error)

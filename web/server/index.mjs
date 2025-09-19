@@ -315,7 +315,7 @@ function applyClinicalHeuristics(triage, transcript) {
 
 app.post('/api/triage', async (req, res) => {
   try {
-    const { patientId, transcript, age, sex, image } = req.body || {}
+    const { patientId, transcript, age, sex, image, username } = req.body || {}
     if (!patientId || !transcript) {
       return res.status(400).json({ error: 'Missing required fields: patientId, transcript' })
     }
@@ -372,8 +372,10 @@ app.post('/api/triage', async (req, res) => {
       if (supabase) {
         try {
           console.log('[api] Storing triage history in table:', TRIAGE_TABLE)
+          const generateShortId = () => Math.random().toString(36).slice(2, 9)
           const triageData = {
-            id: crypto.randomUUID(),
+            id: generateShortId(),
+            username: username || null,
             age: age || null,
             gender: sex || null,
             symptoms: transcript,

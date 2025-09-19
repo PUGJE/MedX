@@ -8,6 +8,7 @@ export interface TriageRequest {
   transcript: string;
   age?: number;
   sex?: 'male' | 'female' | 'other' | 'unknown';
+  username?: string;
   image?: {
     mimeType: string; // e.g., 'image/jpeg'
     data: string; // base64 data

@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import { RecordsService, type MedicalRecord } from '../lib/records.service'
 import { PatientsService, type Patient } from '../lib/patients.service'
 import { TriageHistoryService, type TriageHistory } from '../lib/triageHistory.service'
+import { useAuth } from '../state/AuthContext'
 
 export default function RecordsPage() {
+  const { user } = useAuth()
   const [records, setRecords] = useState<MedicalRecord[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
@@ -60,11 +62,11 @@ export default function RecordsPage() {
 
   useEffect(() => {
     let isMounted = true
-    TriageHistoryService.list().then((items) => {
+    TriageHistoryService.list(user?.username).then((items) => {
       if (isMounted) setTriage(items)
     }).catch(() => {})
     return () => { isMounted = false }
-  }, [])
+  }, [user?.username])
 
   async function reload() {
     try {

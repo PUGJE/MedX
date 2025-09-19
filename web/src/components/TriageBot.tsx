@@ -5,10 +5,12 @@ import type { TriageRequest } from '../lib/triage.service';
 import { type TriageReport } from '../lib/triage.schema';
 import { FiActivity, FiClock, FiAlertTriangle, FiCheckCircle, FiHeart, FiThermometer, FiDroplet, FiPhone } from 'react-icons/fi';
 import { useTranslation } from '../contexts/LanguageContext';
+import { useAuth } from '../state/AuthContext';
 
 export default function TriageBot() {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [input, setInput] = useState('');
   const [age, setAge] = useState('');
   const [sex, setSex] = useState<'male' | 'female' | 'other' | 'unknown'>('unknown');
@@ -103,11 +105,13 @@ export default function TriageBot() {
         ? `${input}\nFollow-up answer: ${followUpAnswer.trim()}`
         : input;
 
+      const shortId = Math.random().toString(36).slice(2, 9);
       const request: TriageRequest = {
-        patientId: crypto.randomUUID(),
+        patientId: shortId,
         transcript: combinedTranscript,
         age: parseInt(age, 10) || undefined,
         sex: sex,
+        username: user?.username,
         image: imagePayload || undefined,
       };
 
