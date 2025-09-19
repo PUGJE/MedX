@@ -6,6 +6,7 @@ const TRIAGE_API_URL = '/api/triage';
 export interface TriageRequest {
   patientId: string;
   transcript: string;
+  name?: string;
   age?: number;
   sex?: 'male' | 'female' | 'other' | 'unknown';
   username?: string;

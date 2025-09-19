@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { RecordsService, type MedicalRecord } from '../lib/records.service'
 import { PatientsService, type Patient } from '../lib/patients.service'
 import { TriageHistoryService, type TriageHistory } from '../lib/triageHistory.service'
 import { useAuth } from '../state/AuthContext'
 
 export default function RecordsPage() {
+  const navigate = useNavigate()
   const { user } = useAuth()
   const [records, setRecords] = useState<MedicalRecord[]>([])
   const [loading, setLoading] = useState<boolean>(true)
@@ -222,10 +224,13 @@ export default function RecordsPage() {
         ) : (
           <ul className="space-y-3">
             {triage.map((t) => (
-              <li key={t.id} className="rounded-lg border border-white/10 bg-white/5 p-4">
+              <li key={t.id} className="rounded-lg border border-white/10 bg-white/5 p-4 cursor-pointer hover:bg-white/10 transition-colors" onClick={() => navigate(`/records/triage/${t.id}`)}>
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="font-medium">{t.disease_category || 'Assessment'}</div>
+                    {t.name && (
+                      <div className="text-sm text-teal-300 font-medium">{t.name}</div>
+                    )}
                     {t.summary ? (
                       <div className="text-sm text-gray-300 line-clamp-2">{t.summary}</div>
                     ) : null}

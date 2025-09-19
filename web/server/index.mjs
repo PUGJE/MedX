@@ -61,8 +61,8 @@ const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY
   ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY)
   : null
 
-// Allow overriding triage table via env; default to "triage_History" per user DB
-const TRIAGE_TABLE = process.env.TRIAGE_TABLE || 'triage_History'
+// Allow overriding triage table via env; default to lowercase to match Supabase
+const TRIAGE_TABLE = process.env.TRIAGE_TABLE || 'triage_history'
 
 const SYSTEM = `You are a healthcare triage assistant.
 DO NOT explain, DO NOT use Markdown, DO NOT add extra text.
@@ -315,7 +315,7 @@ function applyClinicalHeuristics(triage, transcript) {
 
 app.post('/api/triage', async (req, res) => {
   try {
-    const { patientId, transcript, age, sex, image, username } = req.body || {}
+    const { patientId, transcript, name, age, sex, image, username } = req.body || {}
     if (!patientId || !transcript) {
       return res.status(400).json({ error: 'Missing required fields: patientId, transcript' })
     }
@@ -376,14 +376,21 @@ app.post('/api/triage', async (req, res) => {
           const triageData = {
             id: generateShortId(),
             username: username || null,
+            name: name || null,
             age: age || null,
             gender: sex || null,
             symptoms: transcript,
             description: validated.summaryForDoctor,
             disease_category: validated.possibleConditions?.[0]?.name || null,
             summary: validated.summaryForDoctor,
+            urgency: validated.urgency || null,
+            recommended_action: validated.recommendedAction || null,
+            recommended_action_reason: validated.recommendedActionReason || null,
             instant_remedies: validated.instantRemedies ? JSON.stringify(validated.instantRemedies) : null,
             recommended_actions: validated.followUps ? JSON.stringify(validated.followUps) : null,
+            red_flags: validated.redFlags ? JSON.stringify(validated.redFlags) : null,
+            possible_conditions: validated.possibleConditions ? JSON.stringify(validated.possibleConditions) : null,
+            vitals: validated.vitals ? JSON.stringify(validated.vitals) : null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           }

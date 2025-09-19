@@ -8,6 +8,7 @@ import ConsultationPage from './pages/ConsultationPage.tsx'
 import VideoConsultationPage from './pages/VideoConsultationPage.tsx'
 import SymptomsPage from './pages/SymptomsPage.tsx'
 import RecordsPage from './pages/RecordsPage.tsx'
+import TriageDetailPage from './pages/TriageDetailPage.tsx'
 import MedicinesPage from './pages/MedicinesPage.tsx'
 import ProfilePage from './pages/ProfilePage.tsx'
 import Header from './components/Header.tsx'
@@ -48,6 +49,7 @@ export default function App() {
           <Route path="/video-consultation" element={<VideoConsultationPage />} />
           <Route path="/symptoms" element={<SymptomsPage />} />
           <Route path="/records" element={<RecordsPage />} />
+          <Route path="/records/triage/:id" element={<TriageDetailPage />} />
           <Route path="/medicines" element={<MedicinesPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/home" replace />} />

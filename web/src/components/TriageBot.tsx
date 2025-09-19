@@ -12,6 +12,7 @@ export default function TriageBot() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const [input, setInput] = useState('');
+  const [name, setName] = useState('');
   const [age, setAge] = useState('');
   const [sex, setSex] = useState<'male' | 'female' | 'other' | 'unknown'>('unknown');
   const [report, setReport] = useState<TriageReport | null>(null);
@@ -109,6 +110,7 @@ export default function TriageBot() {
       const request: TriageRequest = {
         patientId: shortId,
         transcript: combinedTranscript,
+        name: name.trim() || undefined,
         age: parseInt(age, 10) || undefined,
         sex: sex,
         username: user?.username,
@@ -169,6 +171,21 @@ export default function TriageBot() {
 
       {/* Form */}
       <div className="bg-white/10 backdrop-blur-sm rounded-2xl shadow-lg ring-1 ring-white/20 p-6 space-y-4">
+        {/* Name Input */}
+        <div>
+          <label htmlFor="name" className="block text-sm font-medium text-gray-200 mb-2">
+            Name
+          </label>
+          <input
+            type="text"
+            id="name"
+            className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            placeholder="Enter your name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+
         {/* Age and Sex Inputs */}
         <div className="grid grid-cols-2 gap-4">
           <div>
