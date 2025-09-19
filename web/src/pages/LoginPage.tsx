@@ -30,7 +30,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen grid place-items-center p-6 bg-gray-950 text-gray-100 bg-[radial-gradient(60%_50%_at_50%_-10%,rgba(20,83,45,0.45),transparent)]">
+    <div className="min-h-screen grid place-items-center p-6 bg-gray-50 text-gray-900 bg-[radial-gradient(60%_50%_at_50%_-10%,rgba(20,83,45,0.12),transparent)] dark:bg-gray-950 dark:text-gray-100 dark:bg-[radial-gradient(60%_50%_at_50%_-10%,rgba(20,83,45,0.45),transparent)]">
       <div className="w-full max-w-sm">
         <div className="text-center mb-4">
           {/* MedX Branding with Sparkles extending behind Sign in */}
@@ -56,7 +56,7 @@ export default function LoginPage() {
               />
 
               {/* Radial Gradient to prevent sharp edges - extended to cover sign in area */}
-              <div className="absolute inset-0 w-full h-full bg-gray-950 [mask-image:radial-gradient(400px_300px_at_center,transparent_30%,white)]"></div>
+            <div className="absolute inset-0 w-full h-full bg-gray-50 dark:bg-gray-950 [mask-image:radial-gradient(400px_300px_at_center,transparent_30%,white)]"></div>
             </div>
             
             {/* Sign in text positioned over the sparkles */}

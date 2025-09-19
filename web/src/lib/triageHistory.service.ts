@@ -38,9 +38,30 @@ console.log('Current URL:', window.location.href)
 export class TriageHistoryService {
   static async create(entry: Partial<TriageHistory>): Promise<TriageHistory> {
     const generateShortId = (): string => Math.random().toString(36).slice(2, 9)
+    
+    // Check if username exists in users table to avoid foreign key constraint
+    let validUsername = null
+    if (entry.username) {
+      try {
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('username')
+          .eq('username', entry.username)
+          .single()
+        
+        if (!userError && userData) {
+          validUsername = entry.username
+        } else {
+          console.warn('Username not found in users table, storing as anonymous:', entry.username)
+        }
+      } catch (userCheckError: any) {
+        console.warn('Error checking user existence:', userCheckError?.message)
+      }
+    }
+    
     const fullPayload: any = {
       id: generateShortId(),
-      username: entry.username ?? null,
+      username: validUsername,
       name: entry.name ?? null,
       age: entry.age ?? null,
       gender: entry.gender ?? null,
@@ -51,19 +72,11 @@ export class TriageHistoryService {
       urgency: entry.urgency ?? null,
       recommended_action: entry.recommended_action ?? null,
       recommended_action_reason: entry.recommended_action_reason ?? null,
-      instant_remedies: Array.isArray(entry.instant_remedies)
-        ? JSON.stringify(entry.instant_remedies)
-        : entry.instant_remedies ?? null,
-      recommended_actions: Array.isArray(entry.recommended_actions)
-        ? JSON.stringify(entry.recommended_actions)
-        : entry.recommended_actions ?? null,
-      red_flags: Array.isArray(entry.red_flags)
-        ? JSON.stringify(entry.red_flags)
-        : entry.red_flags ?? null,
-      possible_conditions: Array.isArray(entry.possible_conditions)
-        ? JSON.stringify(entry.possible_conditions)
-        : entry.possible_conditions ?? null,
-      vitals: entry.vitals ? JSON.stringify(entry.vitals) : null,
+      instant_remedies: entry.instant_remedies ?? null,
+      recommended_actions: entry.recommended_actions ?? null,
+      red_flags: entry.red_flags ?? null,
+      possible_conditions: entry.possible_conditions ?? null,
+      vitals: entry.vitals ?? null,
     }
 
     const minimalPayload: any = {
@@ -82,35 +95,27 @@ export class TriageHistoryService {
     }
 
     let data: any | null = null
-    let error: any | null = null
     try {
-      const res = await supabase
+      let res = await supabase
         .from(TRIAGE_TABLE)
         .insert(fullPayload)
         .select('*')
         .single()
-      data = res.data
-      error = res.error
-    } catch (e) {
-      error = e
-    }
-    if (error) {
-      const res = await supabase
-        .from(TRIAGE_TABLE)
-        .insert(minimalPayload)
-        .select('*')
-        .single()
-      if (res.error) throw res.error
-      data = res.data
-    }
-    // Attempt to parse JSON strings back to arrays for the UI
-    const row: any = data
-    for (const key of ['instant_remedies', 'recommended_actions', 'red_flags', 'possible_conditions', 'vitals']) {
-      const val = row[key]
-      if (typeof val === 'string') {
-        try { row[key] = JSON.parse(val) } catch { /* ignore */ }
+      if (res.error) {
+        // Fallback to minimal set of columns if table lacks the full schema
+        res = await supabase
+          .from(TRIAGE_TABLE)
+          .insert(minimalPayload)
+          .select('*')
+          .single()
+        if (res.error) throw res.error
       }
+      data = res.data
+    } catch (e) {
+      throw e
     }
+    // Data is already in correct format since we're using jsonb columns
+    const row: any = data
     return row as TriageHistory
   }
 
@@ -200,8 +205,14 @@ export class TriageHistoryService {
       .from(tableName)
       .select('*')
     if (username) query = query.eq('username', username)
-    const { data, error } = await query
-      .order('created_at', { ascending: false })
+    // Order by created_at if the column exists; otherwise fetch without ordering
+    let dataResp
+    try {
+      dataResp = await query.order('created_at', { ascending: false })
+    } catch {
+      dataResp = await query
+    }
+    const { data, error } = dataResp
     if (error) {
       console.error('TriageHistoryService.list() error:', error)
       console.error('Error details:', JSON.stringify(error, null, 2))

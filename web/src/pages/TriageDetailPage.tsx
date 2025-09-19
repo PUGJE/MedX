@@ -68,7 +68,7 @@ export default function TriageDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 text-gray-100 bg-[radial-gradient(60%_50%_at_50%_-10%,rgba(20,83,45,0.45),transparent)]">
+      <div className="min-h-screen bg-gray-50 text-gray-900 bg-[radial-gradient(60%_50%_at_50%_-10%,rgba(20,83,45,0.12),transparent)] dark:bg-gray-950 dark:text-gray-100 dark:bg-[radial-gradient(60%_50%_at_50%_-10%,rgba(20,83,45,0.45),transparent)]">
         <div className="flex items-center justify-center min-h-screen">
           <div className="w-8 h-8 border-2 border-teal-500/30 border-t-teal-500 rounded-full animate-spin" />
         </div>
@@ -78,7 +78,7 @@ export default function TriageDetailPage() {
 
   if (error || !triage) {
     return (
-      <div className="min-h-screen bg-gray-950 text-gray-100 bg-[radial-gradient(60%_50%_at_50%_-10%,rgba(20,83,45,0.45),transparent)]">
+      <div className="min-h-screen bg-gray-50 text-gray-900 bg-[radial-gradient(60%_50%_at_50%_-10%,rgba(20,83,45,0.12),transparent)] dark:bg-gray-950 dark:text-gray-100 dark:bg-[radial-gradient(60%_50%_at_50%_-10%,rgba(20,83,45,0.45),transparent)]">
         <div className="p-6">
           <button
             onClick={() => navigate('/records')}
@@ -97,7 +97,7 @@ export default function TriageDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 bg-[radial-gradient(60%_50%_at_50%_-10%,rgba(20,83,45,0.45),transparent)]">
+    <div className="min-h-screen bg-gray-50 text-gray-900 bg-[radial-gradient(60%_50%_at_50%_-10%,rgba(20,83,45,0.12),transparent)] dark:bg-gray-950 dark:text-gray-100 dark:bg-[radial-gradient(60%_50%_at_50%_-10%,rgba(20,83,45,0.45),transparent)]">
       <div className="p-6">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">

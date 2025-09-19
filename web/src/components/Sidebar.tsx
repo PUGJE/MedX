@@ -1,17 +1,17 @@
 import { useUi } from '../state/UiContext'
 import { useAuth } from '../state/AuthContext'
 import { useNavigate } from 'react-router-dom'
+import { useLanguage } from '../contexts/LanguageContext'
 import { FiX, FiUser, FiSun, FiMoon, FiGlobe, FiLogOut } from 'react-icons/fi'
 
 export default function Sidebar() {
   const { 
-    language, 
-    setLanguage, 
     theme, 
     setTheme, 
     isSidebarOpen, 
     setSidebarOpen 
   } = useUi()
+  const { language, setLanguage, availableLanguages } = useLanguage()
   const { logout } = useAuth()
   const navigate = useNavigate()
 
@@ -67,9 +67,11 @@ export default function Sidebar() {
                 value={language}
                 onChange={(e) => setLanguage(e.target.value as any)}
               >
-                <option value="English">English</option>
-                <option value="Hindi">Hindi</option>
-                <option value="Punjabi">Punjabi</option>
+                {availableLanguages.map((lang) => (
+                  <option key={lang.code} value={lang.code} className="bg-gray-800 text-white">
+                    {lang.flag} {lang.nativeName}
+                  </option>
+                ))}
               </select>
             </div>
 

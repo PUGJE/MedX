@@ -1,7 +1,6 @@
 import { useUi } from '../state/UiContext'
 import { FiMapPin, FiMenu } from 'react-icons/fi'
 import Sidebar from './Sidebar'
-import { LanguageSwitcherDropdown } from './LanguageSwitcher'
 import { useTranslation } from '../contexts/LanguageContext'
 
 export default function Header() {
@@ -22,7 +21,6 @@ export default function Header() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <LanguageSwitcherDropdown />
             <button
               onClick={() => setSidebarOpen(true)}
               className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-200 dark:hover:bg-gray-900 transition-colors"

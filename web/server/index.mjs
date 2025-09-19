@@ -368,14 +368,32 @@ app.post('/api/triage', async (req, res) => {
       const heur = applyClinicalHeuristics(normalized, transcript)
       const validated = TriageReportSchema.parse(heur)
       
-      // Store triage history in database
+      // Store triage history in database (robust insert with fallback)
       if (supabase) {
         try {
           console.log('[api] Storing triage history in table:', TRIAGE_TABLE)
           const generateShortId = () => Math.random().toString(36).slice(2, 9)
-          const triageData = {
-            id: generateShortId(),
-            username: username || null,
+          const id = generateShortId()
+
+          // Optional: verify username exists to avoid potential FK constraints in some schemas
+          let validUsername = null
+          if (username) {
+            try {
+              const { data: userData, error: userError } = await supabase
+                .from('users')
+                .select('username')
+                .eq('username', username)
+                .single()
+              if (!userError && userData) validUsername = username
+            } catch {
+              // ignore check errors; proceed without username
+            }
+          }
+
+          // Prefer sending native arrays/objects for JSONB columns
+          const fullPayload = {
+            id,
+            username: validUsername,
             name: name || null,
             age: age || null,
             gender: sex || null,
@@ -386,25 +404,40 @@ app.post('/api/triage', async (req, res) => {
             urgency: validated.urgency || null,
             recommended_action: validated.recommendedAction || null,
             recommended_action_reason: validated.recommendedActionReason || null,
-            instant_remedies: validated.instantRemedies ? JSON.stringify(validated.instantRemedies) : null,
-            recommended_actions: validated.followUps ? JSON.stringify(validated.followUps) : null,
-            red_flags: validated.redFlags ? JSON.stringify(validated.redFlags) : null,
-            possible_conditions: validated.possibleConditions ? JSON.stringify(validated.possibleConditions) : null,
-            vitals: validated.vitals ? JSON.stringify(validated.vitals) : null,
+            instant_remedies: validated.instantRemedies || null,
+            recommended_actions: validated.followUps || null,
+            red_flags: validated.redFlags || null,
+            possible_conditions: validated.possibleConditions || null,
+            vitals: validated.vitals || null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           }
-          
-          const { data, error } = await supabase
+
+          // Minimal payload for very lean schemas
+          const minimalPayload = {
+            id,
+            username: validUsername,
+            name: name || null,
+            age: age || null,
+          }
+
+          let ins = await supabase
             .from(TRIAGE_TABLE)
-            .insert(triageData)
+            .insert(fullPayload)
             .select('*')
             .single()
-          
-          if (error) {
-            console.error('[api] Supabase error:', error)
+          if (ins.error) {
+            console.warn('[api] Full insert failed, retrying minimal:', ins.error?.message)
+            ins = await supabase
+              .from(TRIAGE_TABLE)
+              .insert(minimalPayload)
+              .select('*')
+              .single()
+          }
+          if (ins.error) {
+            console.error('[api] Supabase insert error:', ins.error)
           } else {
-            console.log('[api] Triage history stored successfully:', data?.id)
+            console.log('[api] Triage history stored successfully:', ins.data?.id)
           }
         } catch (dbErr) {
           console.error('[api] Failed to store triage history:', dbErr?.message)

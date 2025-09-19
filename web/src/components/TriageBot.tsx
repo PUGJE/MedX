@@ -119,6 +119,10 @@ export default function TriageBot() {
 
       const result = await TriageService.analyzeSymptoms(request);
       setReport(result);
+      
+      // Note: Triage data is automatically saved by the backend API
+      // No need to save here to avoid duplicate entries
+      
       // Reset follow-up state after submission
       setAskedFollowUp(false);
       setFollowUpQuestion('');
@@ -240,6 +244,7 @@ export default function TriageBot() {
             className="absolute bottom-3 left-3 w-9 h-9 rounded-full bg-white/10 hover:bg-white/15 border border-white/20 text-white flex items-center justify-center"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 5v14m7-7H5"/></svg>
+            <span className="absolute -top-0.2 -right-0.1  w-9 h-9 rounded-full bg-teal-600 text-white text-[22px] font-bold">+</span>
           </button>
           <input
             ref={fileInputRef}

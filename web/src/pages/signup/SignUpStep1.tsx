@@ -36,7 +36,7 @@ export default function SignUpStep1() {
   }
 
   return (
-    <div className="min-h-screen grid place-items-center p-6 bg-gray-950 text-gray-100 bg-[radial-gradient(60%_50%_at_50%_-10%,rgba(20,83,45,0.45),transparent)]">
+    <div className="min-h-screen grid place-items-center p-6 bg-gray-50 text-gray-900 bg-[radial-gradient(60%_50%_at_50%_-10%,rgba(20,83,45,0.12),transparent)] dark:bg-gray-950 dark:text-gray-100 dark:bg-[radial-gradient(60%_50%_at_50%_-10%,rgba(20,83,45,0.45),transparent)]">
       <div className="w-full max-w-sm bg-white/10 backdrop-blur-sm rounded-2xl shadow-lg ring-1 ring-white/20 p-5">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-semibold text-white">Create Account</h1>

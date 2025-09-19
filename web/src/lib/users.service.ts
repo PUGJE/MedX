@@ -16,10 +16,10 @@ function generateToken(): string {
   return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('')
 }
 
-// Generate token expiration (24 hours from now)
+// Generate token expiration (long-lived: ~365 days from now)
 function getTokenExpiration(): string {
   const expiration = new Date()
-  expiration.setHours(expiration.getHours() + 24)
+  expiration.setDate(expiration.getDate() + 365)
   return expiration.toISOString()
 }
 
@@ -120,9 +120,14 @@ export class UsersService {
     console.log('User created successfully:', userData_result?.id)
     const user = userData_result as User
 
-    // If equipment is provided, create equipment entries and link them
+    // If equipment is provided, create equipment entries and link them.
+    // Do not fail user creation if equipment linking fails.
     if (equipmentNames && equipmentNames.length > 0) {
-      await this.addUserEquipment(user.id, equipmentNames)
+      try {
+        await this.addUserEquipment(user.id, equipmentNames)
+      } catch (linkErr) {
+        console.error('Linking equipment failed; continuing without equipment:', linkErr)
+      }
     }
 
     // Generate auth token

@@ -13,38 +13,26 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthContextValue['user']>(undefined)
-
-  // Load persisted user on mount
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        // Check for valid token first
-        const token = localStorage.getItem('auth_token')
-        const expires_at = localStorage.getItem('token_expires')
-        
-        if (token && expires_at && new Date() < new Date(expires_at)) {
-          // Token is valid, load user from localStorage
-          const raw = localStorage.getItem('auth_user')
-          if (raw) setUser(JSON.parse(raw))
-        } else {
-          // Token expired or doesn't exist, clear everything
-          localStorage.removeItem('auth_token')
-          localStorage.removeItem('token_expires')
-          localStorage.removeItem('auth_user')
-        }
-      } catch (error) {
-        console.error('Error loading user:', error)
-        // Clear invalid data
-        localStorage.removeItem('auth_token')
-        localStorage.removeItem('token_expires')
-        localStorage.removeItem('auth_user')
-      }
+function getInitialUser(): User | undefined {
+  try {
+    const token = localStorage.getItem('auth_token')
+    const expires_at = localStorage.getItem('token_expires')
+    if (token && expires_at && new Date() < new Date(expires_at)) {
+      const raw = localStorage.getItem('auth_user')
+      if (raw) return JSON.parse(raw)
     }
-    
-    loadUser()
-  }, [])
+    // Clear if invalid/expired
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('token_expires')
+    localStorage.removeItem('auth_user')
+    return undefined
+  } catch {
+    return undefined
+  }
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<AuthContextValue['user']>(getInitialUser())
 
   // Persist whenever it changes
   useEffect(() => {
@@ -66,6 +54,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const authResult = await UsersService.authenticateUser(username, password)
         if (authResult) {
+          // Persist token and user
+          localStorage.setItem('auth_token', authResult.token)
+          localStorage.setItem('token_expires', authResult.expires_at)
+          localStorage.setItem('auth_user', JSON.stringify(authResult.user))
           setUser(authResult.user)
           return true
         }
