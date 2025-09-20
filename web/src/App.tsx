@@ -7,6 +7,8 @@ import HomePage from './pages/HomePage.tsx'
 import ConsultationPage from './pages/ConsultationPage.tsx'
 import VideoConsultationPage from './pages/VideoConsultationPage.tsx'
 import SymptomsPage from './pages/SymptomsPage.tsx'
+import SymptomsReportPage from './pages/SymptomsReportPage.tsx'
+import LabsPage from './pages/LabsPage.tsx'
 import RecordsPage from './pages/RecordsPage.tsx'
 import TriageDetailPage from './pages/TriageDetailPage.tsx'
 import MedicinesPage from './pages/MedicinesPage.tsx'
@@ -52,6 +54,8 @@ export default function App() {
               <Route path="/consultation" element={<ConsultationPage />} />
               <Route path="/video-consultation" element={<VideoConsultationPage />} />
               <Route path="/symptoms" element={<SymptomsPage />} />
+              <Route path="/symptoms/report" element={<SymptomsReportPage />} />
+              <Route path="/labs" element={<LabsPage />} />
               <Route path="/records" element={<RecordsPage />} />
               <Route path="/records/triage/:id" element={<TriageDetailPage />} />
               <Route path="/medicines" element={<MedicinesPage />} />

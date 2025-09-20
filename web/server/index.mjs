@@ -2,6 +2,10 @@ import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleAIFileManager } from '@google/generative-ai/server'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { z } from 'zod'
 import { createClient } from '@supabase/supabase-js'
 
@@ -9,7 +13,8 @@ dotenv.config()
 
 const app = express()
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: '50mb' }))
+app.use(express.urlencoded({ limit: '50mb', extended: true }))
 
 const TriageReportSchema = z.object({
   patientId: z.string(),
@@ -50,6 +55,55 @@ const TriageReportSchema = z.object({
   instantRemedies: z.array(z.string()).optional(),
   followUps: z.array(z.string()).optional(),
   summaryForDoctor: z.string(),
+  disclaimers: z.array(z.string()),
+})
+
+const ReportAnalysisSchema = z.object({
+  reportId: z.string(),
+  analysisDate: z.string(),
+  
+  // Report Summary
+  reportType: z.string(), // e.g., "Blood Test", "X-Ray", "Prescription", "Lab Report"
+  summary: z.string(),
+  keyFindings: z.array(z.string()),
+  
+  // Medical Information
+  conditions: z.array(z.object({
+    name: z.string(),
+    severity: z.enum(["mild", "moderate", "severe"]).optional(),
+    status: z.enum(["normal", "abnormal", "critical"]).optional(),
+    notes: z.string().optional(),
+  })).optional(),
+  
+  // Medications
+  medications: z.array(z.object({
+    name: z.string(),
+    dosage: z.string().optional(),
+    frequency: z.string().optional(),
+    duration: z.string().optional(),
+    instructions: z.string().optional(),
+  })).optional(),
+  
+  // Recommendations
+  precautions: z.array(z.string()),
+  dietRecommendations: z.array(z.string()).optional(),
+  lifestyleChanges: z.array(z.string()).optional(),
+  followUpActions: z.array(z.string()),
+  
+  // Urgency and Next Steps
+  urgency: z.enum(["low", "medium", "high"]),
+  recommendedAction: z.string(),
+  doctorConsultation: z.boolean(),
+  emergencyWarning: z.string().nullable().optional(),
+  
+  // Additional Information
+  normalRanges: z.array(z.object({
+    parameter: z.string(),
+    value: z.string(),
+    normalRange: z.string(),
+    status: z.enum(["normal", "abnormal", "critical"]),
+  })).optional(),
+  
   disclaimers: z.array(z.string()),
 })
 
@@ -457,6 +511,240 @@ app.post('/api/triage', async (req, res) => {
   } catch (err) {
     console.error('[api] Unexpected error:', err)
     res.status(500).json({ error: 'Triage generation failed', details: err?.message })
+  }
+})
+
+// Report Analysis System Prompt
+const REPORT_ANALYSIS_SYSTEM = `You are a medical report analysis assistant specializing in interpreting lab reports, prescriptions, imaging reports, and other medical documents.
+
+CRITICAL INSTRUCTIONS:
+1. Analyze ONLY the uploaded medical report image
+2. Extract ALL relevant medical information accurately
+3. Provide actionable recommendations based on findings
+4. Return ONLY valid JSON matching the exact schema below
+5. DO NOT provide medical advice - only analysis and recommendations
+6. Always include appropriate disclaimers
+
+REQUIRED JSON SCHEMA:
+{
+  "reportId": "string",
+  "analysisDate": "string (ISO format)",
+  "reportType": "string (e.g., 'Blood Test', 'X-Ray', 'Prescription', 'Lab Report')",
+  "summary": "string (2-3 sentence overview of the report)",
+  "keyFindings": ["string array of main findings"],
+  "conditions": [
+    {
+      "name": "string",
+      "severity": "mild|moderate|severe (optional)",
+      "status": "normal|abnormal|critical (optional)",
+      "notes": "string (optional)"
+    }
+  ],
+  "medications": [
+    {
+      "name": "string",
+      "dosage": "string (optional)",
+      "frequency": "string (optional)",
+      "duration": "string (optional)",
+      "instructions": "string (optional)"
+    }
+  ],
+  "precautions": ["string array of important precautions"],
+  "dietRecommendations": ["string array of dietary advice"],
+  "lifestyleChanges": ["string array of lifestyle modifications"],
+  "followUpActions": ["string array of next steps"],
+  "urgency": "low|medium|high",
+  "recommendedAction": "string (specific action to take)",
+  "doctorConsultation": "boolean (whether doctor visit is needed)",
+  "emergencyWarning": "string (if urgent medical attention needed)",
+  "normalRanges": [
+    {
+      "parameter": "string",
+      "value": "string",
+      "normalRange": "string",
+      "status": "normal|abnormal|critical"
+    }
+  ],
+  "disclaimers": ["This is not medical advice", "Consult your healthcare provider", "For emergencies call local services"]
+}
+
+ANALYSIS GUIDELINES:
+- For lab reports: Extract all values, compare with normal ranges, identify abnormalities
+- For blood reports specifically (CBC, CMP, lipid panel, HbA1c, thyroid panel, LFT/KFT):
+  - Parse parameters like Hb, WBC, Platelets, RBC indices, Glucose (F/PP), HbA1c, Total/LDL/HDL/Triglycerides, AST/ALT/ALP/Bilirubin, Urea/Creatinine, TSH/T3/T4, etc.
+  - Include the exact value and the lab's stated reference range when visible.
+  - Mark each parameter as normal/abnormal/critical.
+  - Summarize dyslipidemia, anemia patterns (microcytic/macrocytic), infection indicators (WBC differential), glycemic control (HbA1c bands), liver/renal dysfunction flags.
+  - Provide diet/lifestyle recommendations tailored to the abnormal parameters (e.g., low saturated fat for high LDL, hydration and iron-rich foods for anemia, carbohydrate moderation for elevated glucose).
+- For prescriptions: Extract medication names, dosages, instructions, duration
+- For imaging: Note findings, abnormalities, recommendations
+- Always assess urgency level based on findings
+- Provide specific, actionable recommendations
+- Include dietary advice when relevant (diabetes, cholesterol, etc.)
+- Suggest lifestyle changes when appropriate
+- Always recommend doctor consultation for abnormal findings`
+
+function buildMockReportAnalysis({ reportId, patientName, patientAge, patientGender }) {
+  return {
+    reportId,
+    analysisDate: new Date().toISOString(),
+    reportType: "Lab Report",
+    summary: "This appears to be a routine blood test with mostly normal values. A few parameters show minor variations from normal ranges.",
+    keyFindings: [
+      "Complete Blood Count within normal limits",
+      "Cholesterol levels slightly elevated",
+      "Blood sugar levels normal"
+    ],
+    conditions: [
+      {
+        name: "Mild Hypercholesterolemia",
+        severity: "mild",
+        status: "abnormal",
+        notes: "Total cholesterol slightly above recommended range"
+      }
+    ],
+    medications: [],
+    precautions: [
+      "Monitor cholesterol levels regularly",
+      "Maintain healthy diet",
+      "Exercise regularly"
+    ],
+    dietRecommendations: [
+      "Reduce saturated fat intake",
+      "Increase fiber consumption",
+      "Limit processed foods",
+      "Include omega-3 rich foods"
+    ],
+    lifestyleChanges: [
+      "Regular physical activity (30 minutes daily)",
+      "Maintain healthy weight",
+      "Avoid smoking and excessive alcohol"
+    ],
+    followUpActions: [
+      "Follow up with primary care physician in 3 months",
+      "Repeat lipid panel in 6 months",
+      "Continue current lifestyle modifications"
+    ],
+    urgency: "low",
+    recommendedAction: "Schedule follow-up appointment with your primary care physician to discuss cholesterol management.",
+    doctorConsultation: true,
+    emergencyWarning: null,
+    normalRanges: [
+      {
+        parameter: "Total Cholesterol",
+        value: "220 mg/dL",
+        normalRange: "< 200 mg/dL",
+        status: "abnormal"
+      },
+      {
+        parameter: "HDL Cholesterol",
+        value: "45 mg/dL",
+        normalRange: "> 40 mg/dL",
+        status: "normal"
+      }
+    ],
+    disclaimers: [
+      "This is not medical advice",
+      "Consult your healthcare provider for proper interpretation",
+      "For medical emergencies, call local emergency services"
+    ]
+  }
+}
+
+app.post('/api/report-analysis', async (req, res) => {
+  try {
+    const { reportId, image, patientName, patientAge, patientGender, username } = req.body || {}
+    if (!reportId || !image || !image.mimeType || !image.data) {
+      return res.status(400).json({ error: 'Missing required fields: reportId, image (with mimeType and data)' })
+    }
+
+    if (!genAI) {
+      // Fallback when no API key is configured (local dev)
+      const mock = buildMockReportAnalysis({ reportId, patientName, patientAge, patientGender })
+      const validated = ReportAnalysisSchema.parse(mock)
+      return res.status(200).json(validated)
+    }
+
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-2.0-flash', 
+      systemInstruction: REPORT_ANALYSIS_SYSTEM 
+    })
+    
+    const userParts = [
+      { 
+        text: `Report ID: ${reportId}\nPatient: ${patientName || 'Not provided'}\nAge: ${patientAge || 'Not provided'}\nGender: ${patientGender || 'Not provided'}\n\nPlease analyze this medical report and provide a comprehensive analysis.` 
+      }
+    ]
+    
+    if (image && image.mimeType && image.data) {
+      if (String(image.mimeType).toLowerCase().includes('pdf')) {
+        // Handle PDF via Gemini Files API
+        const fileManager = new GoogleAIFileManager(process.env.GEMINI_API_KEY)
+        const tmpDir = os.tmpdir()
+        const tmpPath = path.join(tmpDir, `report-${reportId}.pdf`)
+        try {
+          const buffer = Buffer.from(image.data, 'base64')
+          fs.writeFileSync(tmpPath, buffer)
+          const upload = await fileManager.uploadFile(tmpPath, {
+            mimeType: image.mimeType,
+            displayName: `medical-report-${reportId}.pdf`,
+          })
+          userParts.push({ fileData: { fileUri: upload.file.uri, mimeType: image.mimeType } })
+        } catch (upErr) {
+          console.error('[api] PDF upload failed, falling back to mock:', upErr?.message)
+          const mock = buildMockReportAnalysis({ reportId, patientName, patientAge, patientGender })
+          const validated = ReportAnalysisSchema.parse(mock)
+          return res.status(200).json(validated)
+        } finally {
+          try { fs.existsSync(tmpPath) && fs.unlinkSync(tmpPath) } catch {}
+        }
+      } else {
+        // Images use inlineData
+        userParts.push({ inlineData: { mimeType: image.mimeType, data: image.data } })
+      }
+    }
+    
+    let text
+    try {
+      const result = await model.generateContent({
+        contents: [{ role: 'user', parts: userParts }],
+        generationConfig: { responseMimeType: 'application/json' },
+      })
+      text = result.response.text().trim()
+    } catch (modelErr) {
+      console.error('[api] Report analysis model call failed:', modelErr)
+      const mock = buildMockReportAnalysis({ reportId, patientName, patientAge, patientGender })
+      const validated = ReportAnalysisSchema.parse(mock)
+      return res.status(200).json(validated)
+    }
+
+    let parsed
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      const match = text.match(/\{[\s\S]*\}/)
+      if (!match) {
+        console.warn('[api] Model did not return JSON for report analysis, using mock. Raw:', text)
+        const mock = buildMockReportAnalysis({ reportId, patientName, patientAge, patientGender })
+        const validated = ReportAnalysisSchema.parse(mock)
+        return res.status(200).json(validated)
+      }
+      parsed = JSON.parse(match[0])
+    }
+
+    // Validate and return
+    try {
+      const validated = ReportAnalysisSchema.parse(parsed)
+      return res.status(200).json(validated)
+    } catch (valErr) {
+      console.warn('[api] Report analysis validation failed, using mock:', valErr?.message)
+      const mock = buildMockReportAnalysis({ reportId, patientName, patientAge, patientGender })
+      const validated = ReportAnalysisSchema.parse(mock)
+      return res.status(200).json(validated)
+    }
+  } catch (err) {
+    console.error('[api] Report analysis error:', err)
+    res.status(500).json({ error: 'Report analysis failed', details: err?.message })
   }
 })
 

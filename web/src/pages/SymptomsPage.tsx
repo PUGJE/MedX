@@ -1,5 +1,11 @@
+import ReportAnalysis from '../components/ReportAnalysis'
+
 export default function SymptomsPage() {
-  return <h1 className="text-2xl font-semibold">Symptoms Page</h1>
+  return (
+    <div className="p-4">
+      <ReportAnalysis />
+    </div>
+  )
 }
 
 

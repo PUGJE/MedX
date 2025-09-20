@@ -301,7 +301,7 @@ export default function TriageBot() {
 
       {/* Image attach */}
       <div className="flex items-center justify-between">
-        <div className="text-xs text-gray-400">You can attach an image of the affected area.</div>
+        <div className="text-xs text-gray-400">You can attach an image of the affected area or upload a lab report/prescription photo for analysis.</div>
         <label className="inline-flex items-center gap-2 text-xs text-teal-300 hover:text-teal-200 cursor-pointer">
           <input
             type="file"
